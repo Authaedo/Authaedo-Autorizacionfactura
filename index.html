@@ -426,7 +426,8 @@ async function cargarFacturas(){
   }
   try{
     const snap = await db.collection('facturas').get();
-    const items = snap.docs.map(d => d.data());
+    let items = snap.docs.map(d => d.data());
+    items = await limpiarPagadasVencidas(items);
     items.sort((a,b) => new Date(b.creadoFecha) - new Date(a.creadoFecha));
     facturas = items;
     render();
@@ -434,6 +435,27 @@ async function cargarFacturas(){
     console.error(e);
     document.getElementById('board').innerHTML = '<div class="empty">No se pudo cargar el tablero. Probá recargar la página.</div>';
   }
+}
+
+const DIAS_RETENCION_PAGADAS = 15;
+
+async function limpiarPagadasVencidas(items){
+  const ahora = Date.now();
+  const vencidas = items.filter(f => {
+    if(f.estado !== 'pagada' || !f.fechaPagada) return false;
+    const dias = (ahora - new Date(f.fechaPagada).getTime()) / (1000*60*60*24);
+    return dias >= DIAS_RETENCION_PAGADAS;
+  });
+  if(vencidas.length){
+    try{
+      await Promise.all(vencidas.map(f => db.collection('facturas').doc(f.id).delete()));
+    }catch(e){
+      console.error('No se pudieron borrar facturas vencidas', e);
+      return items;
+    }
+  }
+  const vencidasIds = new Set(vencidas.map(f => f.id));
+  return items.filter(f => !vencidasIds.has(f.id));
 }
 
 async function guardarFactura(f){
