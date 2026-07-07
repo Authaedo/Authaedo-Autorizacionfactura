@@ -81,6 +81,28 @@
 
 <div class="wrap">
 
+  <div class="panel" id="sesion-panel">
+    <h2 id="sesion-title">Iniciar sesión</h2>
+    <div id="login-box" class="grid">
+      <div>
+        <label for="login-email">Mail</label>
+        <input id="login-email" type="email" placeholder="tumail@authaedo.com.ar">
+      </div>
+      <div>
+        <label for="login-pass">Contraseña</label>
+        <input id="login-pass" type="password" placeholder="Contraseña">
+      </div>
+    </div>
+    <div class="actions-row" id="login-actions">
+      <button class="btn btn-primary" onclick="login()">Ingresar</button>
+      <span class="msg" id="sesion-msg"></span>
+    </div>
+    <div class="actions-row" id="logout-actions" style="display:none;">
+      <span class="msg" id="sesion-conectado"></span>
+      <button class="btn btn-outline btn-sm" onclick="logout()">Cerrar sesión</button>
+    </div>
+  </div>
+
   <div class="panel">
     <h2>Cargar nueva factura</h2>
     <div class="grid" id="form">
@@ -162,6 +184,7 @@
 
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
 <script>
 /* ===== CONFIGURACIÓN FIREBASE — completar con los datos de tu proyecto ===== */
@@ -174,9 +197,11 @@ const firebaseConfig = {
   appId: "1:628943766171:web:38b4e9a1beedc272797c3e"
 };
 let db = null;
+let auth = null;
 if(firebaseConfig.apiKey !== 'TU_API_KEY'){
   firebase.initializeApp(firebaseConfig);
   db = firebase.firestore();
+  auth = firebase.auth();
 }
 
 /* ===== CONFIGURACIÓN EMAILJS — completar con los datos de tu cuenta ===== */
@@ -278,6 +303,86 @@ const AUTORIZADOR_EMAILS = {
 function poblarComprador(){
   const sel = document.getElementById('f-comprador');
   sel.innerHTML = EMPLOYEES.map(([nombre, mail]) => `<option value="${mail}">${nombre}</option>`).join('');
+}
+
+/* Gente que puede marcar pago programado / pagada (por mail) */
+const PAGADORES = {
+  'ggodoy@authaedo.com.ar': 'Gonzalo Godoy',
+  'mvitale@authaedo.com.ar': 'Vitale Vernengo Martina',
+  'caja@authaedo.com.ar': 'Caja'
+};
+
+const EMAIL_TO_NAME = {};
+EMPLOYEES.forEach(([nombre, mail]) => { EMAIL_TO_NAME[mail] = nombre; });
+Object.entries(PAGADORES).forEach(([mail, nombre]) => { if(!EMAIL_TO_NAME[mail]) EMAIL_TO_NAME[mail] = nombre; });
+
+let sesionEmail = null;
+let sesionNombre = null;
+
+async function login(){
+  const email = document.getElementById('login-email').value.trim();
+  const pass = document.getElementById('login-pass').value;
+  const msg = document.getElementById('sesion-msg');
+  if(!auth){ msg.textContent = 'Falta configurar Firebase Authentication.'; return; }
+  if(!email || !pass){ msg.textContent = 'Completá mail y contraseña.'; return; }
+  msg.textContent = 'Ingresando...';
+  try{
+    await auth.signInWithEmailAndPassword(email, pass);
+  }catch(e){
+    msg.textContent = 'No se pudo ingresar. Revisá el mail y la contraseña.';
+  }
+}
+
+function logout(){
+  if(auth) auth.signOut();
+}
+
+function actualizarUISesion(){
+  const loginBox = document.getElementById('login-box');
+  const loginActions = document.getElementById('login-actions');
+  const logoutActions = document.getElementById('logout-actions');
+  const title = document.getElementById('sesion-title');
+  if(sesionEmail){
+    loginBox.style.display = 'none';
+    loginActions.style.display = 'none';
+    logoutActions.style.display = 'flex';
+    title.textContent = 'Sesión';
+    document.getElementById('sesion-conectado').textContent = `Conectado como: ${sesionNombre}`;
+  } else {
+    loginBox.style.display = 'grid';
+    loginActions.style.display = 'flex';
+    logoutActions.style.display = 'none';
+    title.textContent = 'Iniciar sesión';
+    document.getElementById('sesion-msg').textContent = '';
+  }
+  render();
+}
+
+if(auth){
+  auth.onAuthStateChanged(user => {
+    if(user){
+      sesionEmail = user.email;
+      sesionNombre = EMAIL_TO_NAME[user.email] || user.email;
+    } else {
+      sesionEmail = null;
+      sesionNombre = null;
+    }
+    actualizarUISesion();
+  });
+}
+
+function esAutorizador(email){
+  return !!email && Object.values(AUTORIZADOR_EMAILS).includes(email);
+}
+
+function puedeAutorizar(f){
+  if(!sesionEmail) return false;
+  if(f.autorizadorEmail) return sesionEmail === f.autorizadorEmail;
+  return esAutorizador(sesionEmail);
+}
+
+function puedePagar(){
+  return !!sesionEmail && !!PAGADORES[sesionEmail];
 }
 
 let facturas = [];
@@ -393,9 +498,10 @@ async function crearFactura(){
   }
 }
 
-async function autorizar(id, quien){
+async function autorizar(id){
   const f = facturas.find(x => x.id === id);
-  if(!f) return;
+  if(!f || !puedeAutorizar(f)) return;
+  const quien = sesionNombre;
   f.estado = 'autorizada';
   f.sello = {por: quien, fecha: new Date().toISOString()};
   f.notificaciones.push({fecha: new Date().toISOString(), texto: `Autorizada por ${quien}. Aviso enviado a ${f.comprador}.`});
@@ -408,7 +514,7 @@ async function autorizar(id, quien){
 
 async function programarPago(id){
   const f = facturas.find(x => x.id === id);
-  if(!f) return;
+  if(!f || !puedePagar()) return;
   const input = document.getElementById('pago-fecha-' + id);
   const fecha = input.value;
   if(!fecha){ return; }
@@ -425,7 +531,7 @@ async function programarPago(id){
 
 async function marcarPagada(id){
   const f = facturas.find(x => x.id === id);
-  if(!f) return;
+  if(!f || !puedePagar()) return;
   f.estado = 'pagada';
   f.notificaciones.push({fecha: new Date().toISOString(), texto: `Factura marcada como pagada.`});
   await guardarFactura(f);
@@ -457,23 +563,32 @@ function cardHtml(f){
   if(f.sello){
     detalle += `<div class="stamp">Controlado y autorizado por: ${f.sello.por} — ${fmtFecha(f.sello.fecha)}</div>`;
   } else if(f.estado === 'pendiente') {
-    detalle += `<div class="authrow">
-      <select id="auth-select-${f.id}"><option value="${f.autorizador}">${f.autorizador}</option>${autorizadoresOptions()}</select>
-      <button class="btn btn-primary btn-sm" onclick="autorizar('${f.id}', document.getElementById('auth-select-${f.id}').value)">Autorizar</button>
-    </div>`;
+    if(puedeAutorizar(f)){
+      detalle += `<div class="authrow">
+        <button class="btn btn-primary btn-sm" onclick="autorizar('${f.id}')">Autorizar como ${sesionNombre}</button>
+      </div>`;
+    } else {
+      detalle += `<div class="status-msg" style="color:var(--muted)">Solo ${f.autorizador} puede autorizar esta factura.</div>`;
+    }
   }
 
   if(f.estado === 'autorizada'){
-    detalle += `<div class="authrow">
-      <input type="date" id="pago-fecha-${f.id}" value="${proximoJueves()}">
-      <button class="btn btn-primary btn-sm" onclick="programarPago('${f.id}')">Programar pago</button>
-    </div>
-    <div class="status-msg" style="color:var(--muted)">Los pagos se emiten los jueves, salvo excepción acordada.</div>`;
+    if(puedePagar()){
+      detalle += `<div class="authrow">
+        <input type="date" id="pago-fecha-${f.id}" value="${proximoJueves()}">
+        <button class="btn btn-primary btn-sm" onclick="programarPago('${f.id}')">Programar pago</button>
+      </div>
+      <div class="status-msg" style="color:var(--muted)">Los pagos se emiten los jueves, salvo excepción acordada.</div>`;
+    } else {
+      detalle += `<div class="status-msg" style="color:var(--muted)">Solo pago a proveedores puede programar el pago.</div>`;
+    }
   }
 
   if(f.estado === 'pago_programado'){
-    detalle += `<div class="status-msg">Pago programado: ${new Date(f.fechaPago+'T00:00:00').toLocaleDateString('es-AR')}</div>
-    <div class="authrow"><button class="btn btn-outline btn-sm" onclick="marcarPagada('${f.id}')">Marcar como pagada</button></div>`;
+    detalle += `<div class="status-msg">Pago programado: ${new Date(f.fechaPago+'T00:00:00').toLocaleDateString('es-AR')}</div>`;
+    if(puedePagar()){
+      detalle += `<div class="authrow"><button class="btn btn-outline btn-sm" onclick="marcarPagada('${f.id}')">Marcar como pagada</button></div>`;
+    }
   }
 
   if(f.notificaciones && f.notificaciones.length){
