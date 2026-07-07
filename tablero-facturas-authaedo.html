@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tablero de facturas — Authaedo</title>
+<style>
+  :root{
+    --navy:#12263A;
+    --navy-2:#1B3A57;
+    --silver:#C7CCD1;
+    --paper:#F6F7F8;
+    --card:#FFFFFF;
+    --line:#E2E5E8;
+    --text:#1C2530;
+    --muted:#67707A;
+    --amber:#B7791F;
+    --amber-bg:#FCEFDA;
+    --green:#1F7A5C;
+    --green-bg:#E1F3EB;
+    --blue:#1D5FA0;
+    --blue-bg:#E4EFFA;
+    --gray:#5B6570;
+    --gray-bg:#EDEEF0;
+    --red:#B3261E;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;background:var(--paper);color:var(--text);}
+  header{background:var(--navy);color:#fff;padding:22px 28px;border-bottom:3px solid var(--silver);}
+  header h1{margin:0;font-size:20px;font-weight:600;letter-spacing:.2px;}
+  header p{margin:4px 0 0;font-size:13px;color:#C9D3DC;}
+  .wrap{max-width:1180px;margin:0 auto;padding:24px 20px 60px;}
+  .panel{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:20px;margin-bottom:24px;}
+  .panel h2{font-size:15px;margin:0 0 14px;color:var(--navy-2);}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;}
+  label{display:block;font-size:12px;color:var(--muted);margin-bottom:4px;}
+  input,select{width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:6px;font-size:14px;background:#fff;color:var(--text);}
+  input:focus,select:focus{outline:2px solid var(--blue);outline-offset:1px;}
+  .full{grid-column:1/-1;}
+  .btn{appearance:none;border:none;border-radius:6px;padding:9px 16px;font-size:13px;font-weight:600;cursor:pointer;}
+  .btn-primary{background:var(--navy);color:#fff;}
+  .btn-primary:hover{background:var(--navy-2);}
+  .btn-outline{background:#fff;border:1px solid var(--line);color:var(--text);}
+  .btn-outline:hover{border-color:var(--muted);}
+  .btn-sm{padding:6px 10px;font-size:12px;}
+  .actions-row{margin-top:14px;display:flex;gap:10px;align-items:center;}
+  .msg{font-size:12px;color:var(--muted);}
+  .board{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;}
+  @media (max-width:900px){.board{grid-template-columns:1fr;}}
+  .col h3{font-size:13px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin:0 0 10px;display:flex;justify-content:space-between;}
+  .col-body{display:flex;flex-direction:column;gap:10px;min-height:60px;}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px 14px;cursor:pointer;}
+  .card:hover{border-color:var(--navy-2);}
+  .card .top{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;}
+  .card .prov{font-weight:600;font-size:14px;}
+  .card .monto{font-size:13px;color:var(--muted);white-space:nowrap;}
+  .card .meta{font-size:12px;color:var(--muted);margin-top:4px;}
+  .badge{display:inline-block;font-size:11px;font-weight:600;padding:2px 8px;border-radius:20px;margin-top:8px;}
+  .b-pendiente{background:var(--amber-bg);color:var(--amber);}
+  .b-autorizada{background:var(--green-bg);color:var(--green);}
+  .b-pago_programado{background:var(--blue-bg);color:var(--blue);}
+  .b-pagada{background:var(--gray-bg);color:var(--gray);}
+  .empty{font-size:12px;color:var(--muted);padding:14px;border:1px dashed var(--line);border-radius:8px;text-align:center;}
+  .detail{margin-top:10px;padding-top:10px;border-top:1px solid var(--line);font-size:13px;}
+  .stamp{margin-top:10px;padding:10px 12px;background:var(--green-bg);border:1px solid var(--green);border-radius:6px;color:var(--green);font-size:12.5px;}
+  .notiflog{margin-top:10px;font-size:11.5px;color:var(--muted);}
+  .notiflog div{padding:3px 0;border-top:1px dashed var(--line);}
+  .notiflog div:first-child{border-top:none;}
+  .authrow{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;align-items:center;}
+  .footer-note{font-size:12px;color:var(--muted);margin-top:20px;line-height:1.6;}
+  .pdfline{font-size:12px;margin-top:6px;}
+  .pdfline a{color:var(--blue);}
+  .status-msg{font-size:12px;margin-top:8px;}
+</style>
+</head>
+<body>
+<header>
+  <h1>Tablero de facturas de proveedores</h1>
+  <p>Authaedo · presupuesto → autorización → pago a proveedores → archivo digital</p>
+</header>
+
+<div class="wrap">
+
+  <div class="panel">
+    <h2>Cargar nueva factura</h2>
+    <div class="grid" id="form">
+      <div>
+        <label for="f-proveedor">Proveedor</label>
+        <input id="f-proveedor" type="text" placeholder="Ej: Repuestos Sur SA">
+      </div>
+      <div>
+        <label for="f-monto">Monto</label>
+        <input id="f-monto" type="number" placeholder="Ej: 850000">
+      </div>
+      <div>
+        <label for="f-sector">Sector / compra</label>
+        <input id="f-sector" type="text" placeholder="Ej: Taller, Sprinter, Repuestos">
+      </div>
+      <div>
+        <label for="f-comprador">Responsable de la compra</label>
+        <select id="f-comprador"></select>
+      </div>
+      <div>
+        <label for="f-autorizador">Autorizador (lista taxativa)</label>
+        <select id="f-autorizador" onchange="toggleOtros()">
+          <option>Lorenzo Rodrigo</option>
+          <option>Asurmendi Guido</option>
+          <option>Ferri Omar</option>
+          <option>Diaz Rodrigo</option>
+          <option>Cuda Diego</option>
+          <option>Vitale Vernengo Juan Martin</option>
+          <option>Vitale Vernengo Martina</option>
+          <option>Vernengo Carina</option>
+          <option>Vernengo Juan Manuel</option>
+          <option>Vernengo Gustavo</option>
+          <option value="Otros">Otros</option>
+        </select>
+      </div>
+      <div id="otros-wrap" style="display:none;">
+        <label for="f-otros">Nombre (excepción)</label>
+        <input id="f-otros" type="text" placeholder="Nombre de quien autoriza por excepción">
+      </div>
+      <div class="full">
+        <label for="f-pdf">Factura en PDF</label>
+        <input id="f-pdf" type="file" accept="application/pdf">
+      </div>
+    </div>
+    <div class="actions-row">
+      <button class="btn btn-primary" onclick="crearFactura()">Enviar al autorizador</button>
+      <span class="msg" id="form-msg"></span>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>Estado del tablero</h2>
+    <div class="board" id="board">
+      <div class="col">
+        <h3>Pendiente <span id="count-pendiente">0</span></h3>
+        <div class="col-body" id="col-pendiente"></div>
+      </div>
+      <div class="col">
+        <h3>Autorizada <span id="count-autorizada">0</span></h3>
+        <div class="col-body" id="col-autorizada"></div>
+      </div>
+      <div class="col">
+        <h3>Pago programado <span id="count-pago_programado">0</span></h3>
+        <div class="col-body" id="col-pago_programado"></div>
+      </div>
+      <div class="col">
+        <h3>Pagada <span id="count-pagada">0</span></h3>
+        <div class="col-body" id="col-pagada"></div>
+      </div>
+    </div>
+  </div>
+
+  <p class="footer-note">
+    Prototipo de tablero interno. Los datos de las facturas se guardan de forma compartida: cualquiera que abra este mismo tablero verá las mismas facturas y estados.
+    Los mails se envían con EmailJS: completá SERVICE_ID, TEMPLATE_ID y PUBLIC_KEY al inicio del script (buscá "CONFIGURACIÓN EMAILJS") con los datos de tu cuenta, y armá en EmailJS un template con las variables to_email, to_name, asunto y mensaje.
+    El PDF cargado queda adjunto a la factura para poder abrirlo o descargarlo en cualquier momento, incluida una inspección.
+  </p>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
+<script>
+/* ===== CONFIGURACIÓN EMAILJS — completar con los datos de tu cuenta ===== */
+const EMAILJS_PUBLIC_KEY = 'G5SeAeIK_FiwMe6FA';
+const EMAILJS_SERVICE_ID = 'service_3hgfxwi';
+const EMAILJS_TEMPLATE_ID = 'template_p69qufj';
+/* El template en EmailJS debe tener las variables: to_email, to_name, asunto, mensaje */
+if(window.emailjs && EMAILJS_PUBLIC_KEY !== 'TU_PUBLIC_KEY'){
+  emailjs.init(EMAILJS_PUBLIC_KEY);
+}
+
+async function enviarMail(toEmail, toName, asunto, mensaje){
+  if(!toEmail) return;
+  if(EMAILJS_PUBLIC_KEY === 'TU_PUBLIC_KEY'){
+    console.log('[EmailJS sin configurar] Simulado ->', toEmail, asunto, mensaje);
+    return;
+  }
+  try{
+    await emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, {
+      to_email: toEmail, to_name: toName, asunto, mensaje
+    });
+  }catch(e){
+    console.error('Error enviando mail', e);
+  }
+}
+
+/* Lista completa de empleados (nombre, mail) para el selector de comprador */
+const EMPLOYEES = [
+  ['Juan Manuel Vernengo','jvernengo@authaedo.com.ar'],
+  ['Martin Esteban Boghossian','mboghossian@authaedo.com.ar'],
+  ['Gustavo Javier Vernengo','gvernengo@authaedo.com.ar'],
+  ['Marcela Brusca De Giorgio','mbrusca@authaedo.com.ar'],
+  ['Diego Alejandro Cuda','dcuda@authaedo.com.ar'],
+  ['Matias Emiliano Espinola','mespinola@authaedo.com.ar'],
+  ['Santiago Javier Shearer','sshearer@authaedo.com.ar'],
+  ['Hernan Dario Dalia','hdalia@authaedo.com.ar'],
+  ['Abel Adrian Samaniego','asamaniego@authaedo.com.ar'],
+  ['Claudio Jose Chiesa','cchiesa@authaedo.com.ar'],
+  ['Mario Ojeda','mojeda@authaedo.com.ar'],
+  ['Marcelo Daniel Benitez','mbenitez@authaedo.com.ar'],
+  ['Jorge Alberto Terracino','jterracino@authaedo.com.ar'],
+  ['Sergio Omar Ferri','oferri@authaedo.com.ar'],
+  ['Leonel Roberto Mansilla','lmansilla@authaedo.com.ar'],
+  ['Melina Belen Capa','mcapa@authaedo.com.ar'],
+  ['Daniel Segundo Escarez Gonzalez','descarez@authaedo.com.ar'],
+  ['Agustina Vernengo Maffei','avernengo@authaedo.com.ar'],
+  ['Andres S Zivelonghi Miranda','azivelonghi@authaedo.com.ar'],
+  ['Jorge Eugenio Schmidgall','jschmidgall@authaedo.com.ar'],
+  ['Rodrigo Damian Lorenzo','rlorenzo@authaedo.com.ar'],
+  ['Alan Gustavo Vendrame','avendrame@authaedo.com.ar'],
+  ['Martina Vitale Vernengo','mvitale@authaedo.com.ar'],
+  ['Victor Mauricio Brandan','mbrandan@authaedo.com.ar'],
+  ['Carlos Alberto Fariña','carlosf@authaedo.com.ar'],
+  ['Claudio Gabriel Reus','creus@authaedo.com.ar'],
+  ['Javier Benjamin Lopez Riscica','jlopez@authaedo.com.ar'],
+  ['Maria Carina Vernengo','cvernengo@authaedo.com.ar'],
+  ['Elizabeth Chilavert Indira','echilavert@authaedo.com.ar'],
+  ['Guido Leandro Asurmendi','gasurmendi@authaedo.com.ar'],
+  ['Matias Emanuel Ramos','mramos@authaedo.com.ar'],
+  ['Facundo Nestor Gural','fgural@authaedo.com.ar'],
+  ['Aldo David Echarri','aecharri@authaedo.com.ar'],
+  ['Analia Graciela Parada','aparada@authaedo.com.ar'],
+  ['Noelia Daiana Espinoza','nespinoza@authaedo.com.ar'],
+  ['Fernando Da Cruz Costa','fdacruz@authaedo.com.ar'],
+  ['Analia Navoni','anavoni@authaedo.com.ar'],
+  ['Juan Martin Vitale Vernengo','jvitale@authaedo.com.ar'],
+  ['Agustina Geraldine Azorin','aazorin@authaedo.com.ar'],
+  ['Gonzalo Agustin Godoy','ggodoy@authaedo.com.ar'],
+  ['Federico Saddemi','fsaddemi@authaedo.com.ar'],
+  ['Jonatan Daniel Destito','jdestito@authaedo.com.ar'],
+  ['Matias Nicolas Gonzalez','mgonzalez@authaedo.com.ar'],
+  ['Leandro Ariel Britez','lbritez@authaedo.com.ar'],
+  ['Facundo Tomas Carrizo','fcarrizo@authaedo.com.ar'],
+  ['Rodrigo Javier Diaz','rdiaz@authaedo.com.ar'],
+  ['Luciana Mosteiro','lmosteiro@authaedo.com.ar'],
+  ['Lucia Belen Pace','lpace@authaedo.com.ar'],
+  ['Barbara Romina Parodi','bparodi@authaedo.com.ar'],
+  ['Braian Leonardo Tevez','btevez@authaedo.com.ar'],
+  ['Nicolas Ezequiel Waigel','nwaigel@authaedo.com.ar'],
+  ['Dario Fernando Gatti','dgatti@authaedo.com.ar'],
+  ['Cristian Aguirre','caguirre@authaedo.com.ar'],
+  ['Sonia Mariela Trevisan','strevisan@authaedo.com.ar']
+].sort((a,b) => a[0].localeCompare(b[0], 'es'));
+
+/* Mails de la lista taxativa de autorizadores */
+const AUTORIZADOR_EMAILS = {
+  'Lorenzo Rodrigo': 'rlorenzo@authaedo.com.ar',
+  'Asurmendi Guido': 'gasurmendi@authaedo.com.ar',
+  'Ferri Omar': 'oferri@authaedo.com.ar',
+  'Diaz Rodrigo': 'rdiaz@authaedo.com.ar',
+  'Cuda Diego': 'dcuda@authaedo.com.ar',
+  'Vitale Vernengo Juan Martin': 'jvitale@authaedo.com.ar',
+  'Vitale Vernengo Martina': 'mvitale@authaedo.com.ar',
+  'Vernengo Carina': 'cvernengo@authaedo.com.ar',
+  'Vernengo Juan Manuel': 'jvernengo@authaedo.com.ar',
+  'Vernengo Gustavo': 'gvernengo@authaedo.com.ar'
+};
+
+function poblarComprador(){
+  const sel = document.getElementById('f-comprador');
+  sel.innerHTML = EMPLOYEES.map(([nombre, mail]) => `<option value="${mail}">${nombre}</option>`).join('');
+}
+
+let facturas = [];
+
+function toggleOtros(){
+  const v = document.getElementById('f-autorizador').value;
+  document.getElementById('otros-wrap').style.display = v === 'Otros' ? 'block' : 'none';
+}
+
+function fileToDataUrl(file){
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(r.result);
+    r.onerror = reject;
+    r.readAsDataURL(file);
+  });
+}
+
+function fmtMoney(n){
+  return '$' + Number(n||0).toLocaleString('es-AR');
+}
+
+function fmtFecha(d){
+  return new Date(d).toLocaleString('es-AR', {day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit'});
+}
+
+function proximoJueves(){
+  const hoy = new Date();
+  const dia = hoy.getDay();
+  let suma = (4 - dia + 7) % 7;
+  if(suma === 0) suma = 7;
+  const j = new Date(hoy);
+  j.setDate(hoy.getDate() + suma);
+  return j.toISOString().slice(0,10);
+}
+
+async function cargarFacturas(){
+  try{
+    const list = await window.storage.list('factura:', true);
+    if(!list || !list.keys){ facturas = []; render(); return; }
+    const items = [];
+    for(const k of list.keys){
+      try{
+        const r = await window.storage.get(k, true);
+        if(r && r.value) items.push(JSON.parse(r.value));
+      }catch(e){}
+    }
+    items.sort((a,b) => new Date(b.creadoFecha) - new Date(a.creadoFecha));
+    facturas = items;
+    render();
+  }catch(e){
+    document.getElementById('board').innerHTML = '<div class="empty">No se pudo cargar el tablero. Probá recargar la página.</div>';
+  }
+}
+
+async function guardarFactura(f){
+  await window.storage.set('factura:' + f.id, JSON.stringify(f), true);
+}
+
+async function crearFactura(){
+  const proveedor = document.getElementById('f-proveedor').value.trim();
+  const monto = document.getElementById('f-monto').value;
+  const sector = document.getElementById('f-sector').value.trim();
+  const compradorSel = document.getElementById('f-comprador');
+  const compradorEmail = compradorSel.value;
+  const comprador = compradorSel.options[compradorSel.selectedIndex] ? compradorSel.options[compradorSel.selectedIndex].text : '';
+  const autorizadorSel = document.getElementById('f-autorizador').value;
+  const otros = document.getElementById('f-otros').value.trim();
+  const pdfInput = document.getElementById('f-pdf');
+  const msg = document.getElementById('form-msg');
+
+  if(!proveedor || !monto || !comprador){
+    msg.textContent = 'Completá al menos proveedor, monto y responsable de la compra.';
+    return;
+  }
+  const autorizador = autorizadorSel === 'Otros' ? (otros || 'Otros (sin especificar)') : autorizadorSel;
+  const autorizadorEmail = autorizadorSel === 'Otros' ? null : AUTORIZADOR_EMAILS[autorizadorSel];
+
+  let pdfDataUrl = null, pdfName = null;
+  if(pdfInput.files && pdfInput.files[0]){
+    pdfName = pdfInput.files[0].name;
+    try{ pdfDataUrl = await fileToDataUrl(pdfInput.files[0]); }catch(e){}
+  }
+
+  const id = Date.now().toString(36) + Math.random().toString(36).slice(2,6);
+  const f = {
+    id, proveedor, monto, sector, comprador, compradorEmail, autorizador, autorizadorEmail,
+    estado: 'pendiente',
+    sello: null,
+    fechaPago: null,
+    pdfDataUrl, pdfName,
+    creadoFecha: new Date().toISOString(),
+    notificaciones: [{fecha: new Date().toISOString(), texto: `Factura cargada por ${comprador}. Enviada a ${autorizador} para autorización.`}]
+  };
+
+  try{
+    await guardarFactura(f);
+    await enviarMail(autorizadorEmail, autorizador,
+      `Factura de ${proveedor} para autorizar`,
+      `${comprador} cargó una factura de ${proveedor} por ${fmtMoney(monto)} (sector: ${sector || '-'}). Ingresá al tablero para revisarla y autorizarla.`);
+    msg.textContent = 'Factura enviada a ' + autorizador + '.';
+    document.getElementById('f-proveedor').value = '';
+    document.getElementById('f-monto').value = '';
+    document.getElementById('f-sector').value = '';
+    document.getElementById('f-otros').value = '';
+    pdfInput.value = '';
+    await cargarFacturas();
+  }catch(e){
+    msg.textContent = 'Error al guardar. Probá de nuevo.';
+  }
+}
+
+async function autorizar(id, quien){
+  const f = facturas.find(x => x.id === id);
+  if(!f) return;
+  f.estado = 'autorizada';
+  f.sello = {por: quien, fecha: new Date().toISOString()};
+  f.notificaciones.push({fecha: new Date().toISOString(), texto: `Autorizada por ${quien}. Aviso enviado a ${f.comprador}.`});
+  await guardarFactura(f);
+  await enviarMail(f.compradorEmail, f.comprador,
+    `Factura de ${f.proveedor} autorizada`,
+    `Tu factura de ${f.proveedor} por ${fmtMoney(f.monto)} fue autorizada por ${quien}. Pasa ahora a pago a proveedores.`);
+  await cargarFacturas();
+}
+
+async function programarPago(id){
+  const f = facturas.find(x => x.id === id);
+  if(!f) return;
+  const input = document.getElementById('pago-fecha-' + id);
+  const fecha = input.value;
+  if(!fecha){ return; }
+  f.estado = 'pago_programado';
+  f.fechaPago = fecha;
+  const fechaTexto = new Date(fecha+'T00:00:00').toLocaleDateString('es-AR');
+  f.notificaciones.push({fecha: new Date().toISOString(), texto: `Pago programado para el ${fechaTexto}. Aviso enviado a ${f.comprador}.`});
+  await guardarFactura(f);
+  await enviarMail(f.compradorEmail, f.comprador,
+    `Pago programado — factura de ${f.proveedor}`,
+    `El pago de la factura de ${f.proveedor} por ${fmtMoney(f.monto)} fue programado para el ${fechaTexto}.`);
+  await cargarFacturas();
+}
+
+async function marcarPagada(id){
+  const f = facturas.find(x => x.id === id);
+  if(!f) return;
+  f.estado = 'pagada';
+  f.notificaciones.push({fecha: new Date().toISOString(), texto: `Factura marcada como pagada.`});
+  await guardarFactura(f);
+  await cargarFacturas();
+}
+
+function toggleDetalle(id){
+  const el = document.getElementById('detalle-' + id);
+  if(el) el.style.display = el.style.display === 'none' ? 'block' : 'none';
+}
+
+function autorizadoresOptions(selectedPlaceholder){
+  const lista = ['Lorenzo Rodrigo','Asurmendi Guido','Ferri Omar','Diaz Rodrigo','Cuda Diego','Vitale Vernengo Juan Martin','Vitale Vernengo Martina','Vernengo Carina','Vernengo Juan Manuel','Vernengo Gustavo'];
+  return lista.map(n => `<option value="${n}">${n}</option>`).join('');
+}
+
+function cardHtml(f){
+  const badgeClass = 'b-' + f.estado;
+  const badgeLabel = {pendiente:'Pendiente', autorizada:'Autorizada', pago_programado:'Pago programado', pagada:'Pagada'}[f.estado];
+  let detalle = `<div class="detail" id="detalle-${f.id}" style="display:none;">`;
+  detalle += `<div>Sector: ${f.sector || '—'}</div>`;
+  detalle += `<div>Autorizador asignado: ${f.autorizador}</div>`;
+  if(f.pdfDataUrl){
+    detalle += `<div class="pdfline"><a href="${f.pdfDataUrl}" download="${f.pdfName||'factura.pdf'}" target="_blank">Ver / descargar PDF</a></div>`;
+  } else {
+    detalle += `<div class="pdfline" style="color:var(--muted)">Sin PDF adjunto</div>`;
+  }
+
+  if(f.sello){
+    detalle += `<div class="stamp">Controlado y autorizado por: ${f.sello.por} — ${fmtFecha(f.sello.fecha)}</div>`;
+  } else if(f.estado === 'pendiente') {
+    detalle += `<div class="authrow">
+      <select id="auth-select-${f.id}"><option value="${f.autorizador}">${f.autorizador}</option>${autorizadoresOptions()}</select>
+      <button class="btn btn-primary btn-sm" onclick="autorizar('${f.id}', document.getElementById('auth-select-${f.id}').value)">Autorizar</button>
+    </div>`;
+  }
+
+  if(f.estado === 'autorizada'){
+    detalle += `<div class="authrow">
+      <input type="date" id="pago-fecha-${f.id}" value="${proximoJueves()}">
+      <button class="btn btn-primary btn-sm" onclick="programarPago('${f.id}')">Programar pago</button>
+    </div>
+    <div class="status-msg" style="color:var(--muted)">Los pagos se emiten los jueves, salvo excepción acordada.</div>`;
+  }
+
+  if(f.estado === 'pago_programado'){
+    detalle += `<div class="status-msg">Pago programado: ${new Date(f.fechaPago+'T00:00:00').toLocaleDateString('es-AR')}</div>
+    <div class="authrow"><button class="btn btn-outline btn-sm" onclick="marcarPagada('${f.id}')">Marcar como pagada</button></div>`;
+  }
+
+  if(f.notificaciones && f.notificaciones.length){
+    detalle += `<div class="notiflog">` + f.notificaciones.slice().reverse().map(n => `<div>${fmtFecha(n.fecha)} — ${n.texto}</div>`).join('') + `</div>`;
+  }
+  detalle += `</div>`;
+
+  return `<div class="card" onclick="toggleDetalle('${f.id}')">
+    <div class="top">
+      <div class="prov">${f.proveedor}</div>
+      <div class="monto">${fmtMoney(f.monto)}</div>
+    </div>
+    <div class="meta">Comprador: ${f.comprador}</div>
+    <span class="badge ${badgeClass}">${badgeLabel}</span>
+    ${detalle}
+  </div>`;
+}
+
+function render(){
+  const estados = ['pendiente','autorizada','pago_programado','pagada'];
+  estados.forEach(e => {
+    const col = document.getElementById('col-' + e);
+    const items = facturas.filter(f => f.estado === e);
+    document.getElementById('count-' + e).textContent = items.length;
+    col.innerHTML = items.length ? items.map(cardHtml).join('') : '<div class="empty">Sin facturas</div>';
+  });
+}
+
+poblarComprador();
+cargarFacturas();
+</script>
+</body>
+</html>
