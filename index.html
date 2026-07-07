@@ -160,8 +160,25 @@
   </p>
 </div>
 
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
 <script>
+/* ===== CONFIGURACIÓN FIREBASE — completar con los datos de tu proyecto ===== */
+const firebaseConfig = {
+  apiKey: "AIzaSyCNzq_iBucmPRS6XCDhjNOOXMN896qBd3w",
+  authDomain: "authaedo-facturas.firebaseapp.com",
+  projectId: "authaedo-facturas",
+  storageBucket: "authaedo-facturas.firebasestorage.app",
+  messagingSenderId: "628943766171",
+  appId: "1:628943766171:web:38b4e9a1beedc272797c3e"
+};
+let db = null;
+if(firebaseConfig.apiKey !== 'TU_API_KEY'){
+  firebase.initializeApp(firebaseConfig);
+  db = firebase.firestore();
+}
+
 /* ===== CONFIGURACIÓN EMAILJS — completar con los datos de tu cuenta ===== */
 const EMAILJS_PUBLIC_KEY = 'G5SeAeIK_FiwMe6FA';
 const EMAILJS_SERVICE_ID = 'service_3hgfxwi';
@@ -298,26 +315,25 @@ function proximoJueves(){
 }
 
 async function cargarFacturas(){
+  if(!db){
+    document.getElementById('board').innerHTML = '<div class="empty">Falta completar la configuración de Firebase al inicio del archivo.</div>';
+    return;
+  }
   try{
-    const list = await window.storage.list('factura:', true);
-    if(!list || !list.keys){ facturas = []; render(); return; }
-    const items = [];
-    for(const k of list.keys){
-      try{
-        const r = await window.storage.get(k, true);
-        if(r && r.value) items.push(JSON.parse(r.value));
-      }catch(e){}
-    }
+    const snap = await db.collection('facturas').get();
+    const items = snap.docs.map(d => d.data());
     items.sort((a,b) => new Date(b.creadoFecha) - new Date(a.creadoFecha));
     facturas = items;
     render();
   }catch(e){
+    console.error(e);
     document.getElementById('board').innerHTML = '<div class="empty">No se pudo cargar el tablero. Probá recargar la página.</div>';
   }
 }
 
 async function guardarFactura(f){
-  await window.storage.set('factura:' + f.id, JSON.stringify(f), true);
+  if(!db) throw new Error('Firebase sin configurar');
+  await db.collection('facturas').doc(f.id).set(f);
 }
 
 async function crearFactura(){
@@ -343,6 +359,10 @@ async function crearFactura(){
   if(pdfInput.files && pdfInput.files[0]){
     pdfName = pdfInput.files[0].name;
     try{ pdfDataUrl = await fileToDataUrl(pdfInput.files[0]); }catch(e){}
+    if(pdfDataUrl && pdfDataUrl.length > 900000){
+      msg.textContent = 'El PDF es muy pesado (máx. aprox. 600 KB en este prototipo). Cargá la factura sin PDF o con un archivo más liviano.';
+      return;
+    }
   }
 
   const id = Date.now().toString(36) + Math.random().toString(36).slice(2,6);
